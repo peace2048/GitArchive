@@ -17,6 +17,13 @@ namespace GitArchive
         static async Task Main(string[] args)
         {
             await Host.CreateDefaultBuilder()
+                .ConfigureAppConfiguration((hostingContext, config) =>
+                {
+                    var location = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                    var dir = Path.GetDirectoryName(location);
+                    var fileName = Path.GetFileNameWithoutExtension(location);
+                    config.AddJsonFile(Path.Combine(dir, $"{fileName}.config.json"), true);
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.Configure<GitArchiveOptions>(hostContext.Configuration.GetSection(GitArchiveOptions.SectionName));
@@ -97,7 +104,11 @@ namespace GitArchive
 
             if (!silent)
             {
-                File.WriteAllLines(_options.NotifyFile, errors);
+                var dir = Path.GetDirectoryName(_options.NotifyFile);
+                var fileName = Path.GetFileNameWithoutExtension(_options.NotifyFile);
+                var ext = Path.GetExtension(_options.NotifyFile);
+                var outfile = Path.Combine(dir, $"{fileName}-{DateTime.Now:yyyyMMddHHmmss}{ext}");
+                File.WriteAllLines(outfile, errors);
             }
         }
 

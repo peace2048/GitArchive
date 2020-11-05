@@ -76,7 +76,7 @@ namespace GitArchive
 
     public class Archive : ConsoleAppBase
     {
-        private const string ModifyCacheFileName = "git_archive.txt";
+        private const string ModifyCacheFileName = "git_archive_cache.txt";
         private GitArchiveOptions _options;
         private Dictionary<string, DateTime> _modifyCache = null;
 
@@ -258,7 +258,7 @@ namespace GitArchive
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var cacheFile = Path.Combine(home, ModifyCacheFileName);
-            File.WriteAllLines(ModifyCacheFileName, cache.Select(a => $"{a.Key}\t{a.Value:o}"));
+            File.WriteAllLines(cacheFile, cache.Select(a => $"{a.Key}\t{a.Value:o}"));
         }
 
         private (bool isUpdate, string commit) IsUpdateBranch(string basefile, string branch)

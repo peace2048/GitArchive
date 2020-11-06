@@ -102,7 +102,7 @@ namespace GitArchive
                 })
                 .ToList();
 
-            if (!silent)
+            if (!silent && errors.Count > 0)
             {
                 var dir = Path.GetDirectoryName(_options.NotifyFile);
                 var fileName = Path.GetFileNameWithoutExtension(_options.NotifyFile);

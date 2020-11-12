@@ -36,41 +36,52 @@ namespace GitArchive
     {
         public const string SettingsFile = @"git_archive.json";
 
-        public static ArchiveSettings GetSettings()
+        public static (ArchiveSettings, bool) GetSettings()
         {
-            var json = File.ReadAllText(SettingsFile);
+            var fileName = SettingsFile;
+            var onGitFolder = false;
+            if (!File.Exists(fileName))
+            {
+                fileName = Path.Combine(".git", fileName);
+                onGitFolder = true;
+            }
+            var json = File.ReadAllText(fileName);
             var settings = System.Text.Json.JsonSerializer.Deserialize<ArchiveSettings>(json);
-            return settings;
+            return (settings, onGitFolder);
         }
 
-        public static void SaveSettings(ArchiveSettings settings)
+        public static void SaveSettings(ArchiveSettings settings, bool saveToGitFolder = false)
         {
+            var fileName = saveToGitFolder ? Path.Combine(".git", SettingsFile) : SettingsFile;
             var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(SettingsFile, json);
+            File.WriteAllText(fileName, json);
         }
 
-        public void Create([Option(0, "archive folder")] string archiveFolder, [Option("b")] string[] branches = default)
+        public void Create(
+            [Option(0, "archive folder")] string archiveFolder,
+            [Option("b")] string[] branches = default,
+            [Option("g")] bool saveToGitFolder = false)
         {
             var settings = new ArchiveSettings
             {
                 ArchiveFolder = archiveFolder,
                 Branches = (branches ?? new[] { "master" }).ToHashSet()
             };
-            SaveSettings(settings);
+            SaveSettings(settings, saveToGitFolder);
         }
 
         public void Archive([Option(0, "set archive folder")] string archiveFolder)
         {
-            var settings = GetSettings();
+            var (settings, onGitFolder) = GetSettings();
             settings.ArchiveFolder = archiveFolder;
-            SaveSettings(settings);
+            SaveSettings(settings, onGitFolder);
         }
 
         public void Add([Option(0, "branch")] string branch)
         {
-            var settings = GetSettings();
+            var (settings, onGitFolder) = GetSettings();
             settings.Branches.Add(branch);
-            SaveSettings(settings);
+            SaveSettings(settings, onGitFolder);
         }
     }
 
@@ -117,8 +128,13 @@ namespace GitArchive
         private IEnumerable<string> Execute_()
         {
             var dir = Directory.GetCurrentDirectory();
+            if (Path.GetFileName(dir) == ".git")
+            {
+                dir = Path.GetDirectoryName(dir);
+                Directory.SetCurrentDirectory(dir);
+            }
             var repo = Path.GetFileName(dir);
-            var settings = Json.GetSettings();
+            var (settings, _) = Json.GetSettings();
             var results = new List<string>();
             var hasError = false;
 
@@ -156,6 +172,8 @@ namespace GitArchive
                 {
                     _modifyCache.Add(dir, DateTime.Now);
                     SaveModifyCache(_modifyCache);
+
+                    Context.Logger.LogInformation("first check");
                 }
             }
             else
@@ -207,32 +225,35 @@ namespace GitArchive
                 }
             }
 
-            if (!Directory.Exists(settings.ArchiveFolder))
+            if (settings.ArchiveFolder != "-")
             {
-                var message = $"archive folder not exists. [{settings.ArchiveFolder}]";
-                Context.Logger.LogError("[{dir}] {message}", dir, message);
-                results.Add("    ソースファイル保存先 未設定");
-                return results;
-            }
-            var tags = GitCommand("tag").stdout.Where(a => !string.IsNullOrWhiteSpace(a)).ToList();
-            foreach (var tag in tags)
-            {
-                var outfile = Path.Combine(settings.ArchiveFolder, $"{repo}-{tag}.zip");
-                if (!File.Exists(outfile))
+                if (!Directory.Exists(settings.ArchiveFolder))
                 {
-                    GitCommand($"archive -o \"{outfile}\" {tag}");
-                    Context.Logger.LogInformation("archive tag {tag}", tag);
+                    var message = $"archive folder not exists. [{settings.ArchiveFolder}]";
+                    Context.Logger.LogError("[{dir}] {message}", dir, message);
+                    results.Add("    ソースファイル保存先 未設定");
+                    return results;
                 }
-            }
-            foreach (var branch in settings.Branches)
-            {
-                var basefile = Path.Combine(settings.ArchiveFolder, $"{repo}-{branch}-latest");
-                var (isUpdate, commit) = IsUpdateBranch(basefile, branch);
-                if (isUpdate)
+                var tags = GitCommand("tag").stdout.Where(a => !string.IsNullOrWhiteSpace(a)).ToList();
+                foreach (var tag in tags)
                 {
-                    GitCommand($"archive -o \"{basefile}.zip\" {branch}");
-                    File.WriteAllText($"{basefile}.ref", commit);
-                    Context.Logger.LogInformation("archive branch {branch}", branch);
+                    var outfile = Path.Combine(settings.ArchiveFolder, $"{repo}-{tag}.zip");
+                    if (!File.Exists(outfile))
+                    {
+                        GitCommand($"archive -o \"{outfile}\" {tag}");
+                        Context.Logger.LogInformation("archive tag {tag}", tag);
+                    }
+                }
+                foreach (var branch in settings.Branches)
+                {
+                    var basefile = Path.Combine(settings.ArchiveFolder, $"{repo}-{branch}-latest");
+                    var (isUpdate, commit) = IsUpdateBranch(basefile, branch);
+                    if (isUpdate)
+                    {
+                        GitCommand($"archive -o \"{basefile}.zip\" {branch}");
+                        File.WriteAllText($"{basefile}.ref", commit);
+                        Context.Logger.LogInformation("archive branch {branch}", branch);
+                    }
                 }
             }
             return hasError ? results : Enumerable.Empty<string>();
@@ -360,10 +381,6 @@ namespace GitArchive
             public string Comment { get; set; }
         }
 
-        private class GitBranchItem
-        {
-
-        }
     }
 
     public class GitArchiveOptions

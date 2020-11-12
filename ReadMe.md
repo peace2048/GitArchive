@@ -38,19 +38,21 @@ GitArchive.config.json
 例えば notify.txt の場合、2020-1-3 3:04:06 に実行すると notify-20200102030405.txt で作成されます。
 
 
-また、監視フォルダー配下のGitワーキングディレクトリに監視設定ファイル `git_archive.json` を置きます。
+また、監視フォルダー配下のGitワーキングディレクトリ直下または.gitフォルダーに監視設定ファイル `git_archive.json` を置きます。
 `git_archive.json` では、ZIPの保存先、保存するブランチを設定します。
 ブランチは複数設定できます。
 
 git_archive.json
 ```json
 {
-    "ArchiveFolder": "保存先フォルダ",
+    "ArchiveFolder": "保存先フォルダー",
     "Branches": [
         "master"
     ]
 }
 ```
+
+保存先フォルダーに "-" を指定すると、ソースのZIP圧縮は行いません。
 
 `GitArchive archive walk` コマンドをスケジューラに登録し、ログイン時に実行するようなことを想定しています。
 
@@ -73,12 +75,18 @@ git_archive.json
 
     Options:
     -b, -branches <String[]>     (Default: null)
+    -g, -saveToGitFolder         (Optional)
 
 引数のブランチを省略すると master ブランチがデフォルトで設定されます。
 
 例) master と v1 ブランチを C:\Project\X に保存する。
 
     GitArchive json create C:\Project\X -b "master v1"
+
+例) ZIP圧縮は行わない。設定ファイルを .git フォルダーに作成。
+
+    GitArchive json create - -g
+
 
 ### GitArchive json archive
 
